@@ -2,9 +2,10 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from scipy import stats
+import matplotlib.pyplot as plt
 
 st.set_page_config(
-    page_title="Chi-cuadrado Interactivo: Turno vs Condición",
+    page_title="Chi-cuadrado Interactivo con Gráficos",
     layout="wide"
 )
 
@@ -28,7 +29,7 @@ Una fábrica quiere investigar si la condición del producto al salir de una lí
 # 2. CONTROLES INTERACTIVOS (SIDEBAR)
 # ==========================================
 st.sidebar.header("Panel de Configuración Interactiva")
-st.sidebar.markdown("Modifica los valores para recalcular el ejercicio en tiempo real:")
+st.sidebar.markdown("Modifica los valores para recalcular el ejercicio y actualizar los gráficos:")
 
 alpha = st.sidebar.slider(
     "Nivel de significancia (α)",
@@ -46,7 +47,7 @@ st.sidebar.subheader("Turno Tarde")
 t_def = st.sidebar.number_input("Tarde - Defectuosos", min_value=0, max_value=2000, value=24, step=1)
 t_nodef = st.sidebar.number_input("Tarde - No defectuosos", min_value=0, max_value=2000, value=96, step=1)
 
-# Matriz de frecuencias observadas dinámica
+# Matriz de frecuencias observadas
 O = np.array([
     [m_def, m_nodef],
     [t_def, t_nodef]
@@ -67,21 +68,18 @@ df_obs_completa = pd.concat([df_obs, fila_total])
 
 st.dataframe(df_obs_completa, use_container_width=True)
 
-# Validación de suma total
 N = O.sum()
 if N == 0:
-    st.error("La suma total de observaciones no puede ser 0. Por favor, ingresa frecuencias válidas en la barra lateral.")
+    st.error("La suma total de observaciones no puede ser 0. Ingresa valores válidos en la barra lateral.")
     st.stop()
 
-# Parámetros del test
 n_filas, n_columnas = O.shape
 df_gl = (n_filas - 1) * (n_columnas - 1)
 tot_filas = O.sum(axis=1)
 tot_columnas = O.sum(axis=0)
 
-# Validación de marginales positivos
 if (tot_filas == 0).any() or (tot_columnas == 0).any():
-    st.warning("Hay filas o columnas con total 0. Se requieren observaciones en ambas condiciones y turnos para calcular las frecuencias esperadas.")
+    st.warning("Hay filas o columnas con total 0. Se requieren observaciones en ambas condiciones y turnos.")
     st.stop()
 
 # Frecuencias esperadas
@@ -90,7 +88,6 @@ E = np.outer(tot_filas, tot_columnas) / N
 # ==========================================
 # 4. RESOLUCIÓN DE CONSIGNAS
 # ==========================================
-
 st.markdown("---")
 st.subheader("1. Planteo de Hipótesis")
 st.markdown(r"""
@@ -117,7 +114,7 @@ with col_tabla:
 st.markdown("---")
 st.subheader("3. Estadístico de Prueba, Grados de Libertad y Valor-p")
 
-# Cálculo celda por celda
+# Cálculos chi-cuadrado
 terminos_chi = (O - E)**2 / E
 chi2_stat = terminos_chi.sum()
 p_value = 1 - stats.chi2.cdf(chi2_stat, df=df_gl)
@@ -143,15 +140,13 @@ st.write(f"- **Valor crítico con $\\alpha = {alpha}$:** $\\chi^2_{{{alpha}, {df
 st.markdown("---")
 st.subheader("4. Verificación de Supuestos y Conclusión")
 
-# Verificación de frecuencias esperadas >= 5
 todas_mayores_5 = (E >= 5).all()
 st.write("**Condición de aproximación:**")
 if todas_mayores_5:
     st.success(f" Se cumple el supuesto: todas las frecuencias esperadas son $\\ge 5$ (la mínima esperada es {E.min():.2f}). Es válido aplicar la aproximación chi-cuadrado.")
 else:
-    st.warning(f"⚠️ Atención: hay frecuencias esperadas menores a 5 (la mínima esperada es {E.min():.2f}). En muestras pequeñas se recomienda usar la corrección de Yates o el test exacto de Fisher.")
+    st.warning(f"⚠️ Atención: hay frecuencias esperadas menores a 5 (la mínima esperada es {E.min():.2f}).")
 
-# Decisión estadística
 st.write(f"**Comparación con nivel de significancia ($\\alpha = {alpha}$):**")
 if p_value < alpha:
     st.error(f"""
@@ -163,5 +158,65 @@ else:
     st.info(f"""
     Como el valor-$p$ ({p_value:.4f}) es mayor o igual que $\\alpha$ ({alpha}) [o bien $\\chi^2 = {chi2_stat:.4f} \\le {chi2_critico:.4f}$], **no se rechaza $H_0$**.
     
-    **Conclusión:** No existe evidencia estadística suficiente para rechazar la independencia; no se comprueba asociación entre el turno y la condición del producto.
+    **Conclusión:** No existe evidencia estadística suficiente para rechazar la independencia entre el turno y la condición del producto.
     """)
+
+# ==========================================
+# 5. VISUALIZACIÓN GRÁFICA
+# ==========================================
+st.markdown("---")
+st.subheader("5. Gráficos Comparativos y Zona de Decisión")
+
+col_g1, col_g2 = st.columns(2)
+
+# Gráfico 1: Comparación de Frecuencias Observadas vs Esperadas
+with col_g1:
+    fig1, ax1 = plt.subplots(figsize=(6, 4))
+    categorias = ["Mañana - Def", "Mañana - No Def", "Tarde - Def", "Tarde - No Def"]
+    valores_O = [O[0,0], O[0,1], O[1,0], O[1,1]]
+    valores_E = [E[0,0], E[0,1], E[1,0], E[1,1]]
+    
+    x = np.arange(len(categorias))
+    ancho = 0.35
+    
+    ax1.bar(x - ancho/2, valores_O, ancho, label="Observado (O)", color="#1f77b4")
+    ax1.bar(x + ancho/2, valores_E, ancho, label="Esperado (E)", color="#ff7f0e", alpha=0.85)
+    
+    ax1.set_ylabel("Frecuencia")
+    ax1.set_title("Frecuencias Observadas vs. Esperadas")
+    ax1.set_xticks(x)
+    ax1.set_xticklabels(categorias, rotation=15, ha="right")
+    ax1.legend()
+    ax1.grid(axis='y', linestyle='--', alpha=0.6)
+    fig1.tight_layout()
+    st.pyplot(fig1)
+
+# Gráfico 2: Distribución Chi-cuadrado y Región de Rechazo
+with col_g2:
+    fig2, ax2 = plt.subplots(figsize=(6, 4))
+    x_max = max(10.0, chi2_stat + 3, chi2_critico + 3)
+    x_vals = np.linspace(0.01, x_max, 500)
+    y_vals = stats.chi2.pdf(x_vals, df=df_gl)
+    
+    ax2.plot(x_vals, y_vals, label=f"Densidad χ² (gl={df_gl})", color="black", lw=1.5)
+    
+    # Zona de rechazo
+    x_rechazo = np.linspace(chi2_critico, x_max, 300)
+    y_rechazo = stats.chi2.pdf(x_rechazo, df=df_gl)
+    ax2.fill_between(x_rechazo, y_rechazo, color="red", alpha=0.3, label=f"Región Crítica (α={alpha})")
+    
+    # Línea del valor crítico
+    ax2.axvline(chi2_critico, color="red", linestyle="--", label=f"χ² Crítico = {chi2_critico:.2f}")
+    
+    # Línea del estadístico calculado
+    ax2.axvline(chi2_stat, color="blue", linestyle="-", lw=2, label=f"χ² Observado = {chi2_stat:.2f}")
+    
+    ax2.set_xlim(0, x_max)
+    ax2.set_ylim(0, min(1.0, max(y_vals[y_vals < 2]) * 1.2 if len(y_vals[y_vals < 2]) > 0 else 1.0))
+    ax2.set_xlabel("Valor de χ²")
+    ax2.set_ylabel("Densidad de Probabilidad")
+    ax2.set_title("Distribución χ² y Decisión Estadística")
+    ax2.legend(fontsize=8, loc="upper right")
+    ax2.grid(True, linestyle='--', alpha=0.5)
+    fig2.tight_layout()
+    st.pyplot(fig2)
