@@ -5,7 +5,7 @@ from scipy import stats
 import matplotlib.pyplot as plt
 
 st.set_page_config(
-    page_title="Chi-cuadrado Interactivo con Gráficos",
+    page_title="Chi-cuadrado: Turno vs Condición",
     layout="wide"
 )
 
@@ -29,7 +29,7 @@ Una fábrica quiere investigar si la condición del producto al salir de una lí
 # 2. CONTROLES INTERACTIVOS (SIDEBAR)
 # ==========================================
 st.sidebar.header("Panel de Configuración Interactiva")
-st.sidebar.markdown("Modifica los valores para recalcular el ejercicio y actualizar los gráficos:")
+st.sidebar.markdown("Modifica los valores para recalcular el ejercicio en tiempo real:")
 
 alpha = st.sidebar.slider(
     "Nivel de significancia (α)",
@@ -47,7 +47,7 @@ st.sidebar.subheader("Turno Tarde")
 t_def = st.sidebar.number_input("Tarde - Defectuosos", min_value=0, max_value=2000, value=24, step=1)
 t_nodef = st.sidebar.number_input("Tarde - No defectuosos", min_value=0, max_value=2000, value=96, step=1)
 
-# Matriz de frecuencias observadas
+# Matriz de frecuencias observadas dinámica
 O = np.array([
     [m_def, m_nodef],
     [t_def, t_nodef]
@@ -162,61 +162,35 @@ else:
     """)
 
 # ==========================================
-# 5. VISUALIZACIÓN GRÁFICA
+# 5. GRÁFICO: DISTRIBUCIÓN CHI-CUADRADO
 # ==========================================
 st.markdown("---")
-st.subheader("5. Gráficos Comparativos y Zona de Decisión")
+st.subheader("5. Región Crítica y Decisión en la Distribución χ²")
 
-col_g1, col_g2 = st.columns(2)
+fig, ax = plt.subplots(figsize=(8, 4))
+x_max = max(10.0, chi2_stat + 3, chi2_critico + 3)
+x_vals = np.linspace(0.01, x_max, 500)
+y_vals = stats.chi2.pdf(x_vals, df=df_gl)
 
-# Gráfico 1: Comparación de Frecuencias Observadas vs Esperadas
-with col_g1:
-    fig1, ax1 = plt.subplots(figsize=(6, 4))
-    categorias = ["Mañana - Def", "Mañana - No Def", "Tarde - Def", "Tarde - No Def"]
-    valores_O = [O[0,0], O[0,1], O[1,0], O[1,1]]
-    valores_E = [E[0,0], E[0,1], E[1,0], E[1,1]]
-    
-    x = np.arange(len(categorias))
-    ancho = 0.35
-    
-    ax1.bar(x - ancho/2, valores_O, ancho, label="Observado (O)", color="#1f77b4")
-    ax1.bar(x + ancho/2, valores_E, ancho, label="Esperado (E)", color="#ff7f0e", alpha=0.85)
-    
-    ax1.set_ylabel("Frecuencia")
-    ax1.set_title("Frecuencias Observadas vs. Esperadas")
-    ax1.set_xticks(x)
-    ax1.set_xticklabels(categorias, rotation=15, ha="right")
-    ax1.legend()
-    ax1.grid(axis='y', linestyle='--', alpha=0.6)
-    fig1.tight_layout()
-    st.pyplot(fig1)
+# Curva teórica
+ax.plot(x_vals, y_vals, label=f"Densidad χ² (gl={df_gl})", color="#2c3e50", lw=2)
 
-# Gráfico 2: Distribución Chi-cuadrado y Región de Rechazo
-with col_g2:
-    fig2, ax2 = plt.subplots(figsize=(6, 4))
-    x_max = max(10.0, chi2_stat + 3, chi2_critico + 3)
-    x_vals = np.linspace(0.01, x_max, 500)
-    y_vals = stats.chi2.pdf(x_vals, df=df_gl)
-    
-    ax2.plot(x_vals, y_vals, label=f"Densidad χ² (gl={df_gl})", color="black", lw=1.5)
-    
-    # Zona de rechazo
-    x_rechazo = np.linspace(chi2_critico, x_max, 300)
-    y_rechazo = stats.chi2.pdf(x_rechazo, df=df_gl)
-    ax2.fill_between(x_rechazo, y_rechazo, color="red", alpha=0.3, label=f"Región Crítica (α={alpha})")
-    
-    # Línea del valor crítico
-    ax2.axvline(chi2_critico, color="red", linestyle="--", label=f"χ² Crítico = {chi2_critico:.2f}")
-    
-    # Línea del estadístico calculado
-    ax2.axvline(chi2_stat, color="blue", linestyle="-", lw=2, label=f"χ² Observado = {chi2_stat:.2f}")
-    
-    ax2.set_xlim(0, x_max)
-    ax2.set_ylim(0, min(1.0, max(y_vals[y_vals < 2]) * 1.2 if len(y_vals[y_vals < 2]) > 0 else 1.0))
-    ax2.set_xlabel("Valor de χ²")
-    ax2.set_ylabel("Densidad de Probabilidad")
-    ax2.set_title("Distribución χ² y Decisión Estadística")
-    ax2.legend(fontsize=8, loc="upper right")
-    ax2.grid(True, linestyle='--', alpha=0.5)
-    fig2.tight_layout()
-    st.pyplot(fig2)
+# Región crítica sombreada
+x_rechazo = np.linspace(chi2_critico, x_max, 300)
+y_rechazo = stats.chi2.pdf(x_rechazo, df=df_gl)
+ax.fill_between(x_rechazo, y_rechazo, color="#e74c3c", alpha=0.35, label=f"Zona de rechazo (α={alpha})")
+
+# Líneas guía de decisión
+ax.axvline(chi2_critico, color="#c0392b", linestyle="--", lw=1.8, label=f"χ² Crítico = {chi2_critico:.2f}")
+ax.axvline(chi2_stat, color="#2980b9", linestyle="-", lw=2.2, label=f"χ² Observado = {chi2_stat:.2f}")
+
+ax.set_xlim(0, x_max)
+ax.set_ylim(0, min(1.0, max(y_vals[y_vals < 2]) * 1.2 if len(y_vals[y_vals < 2]) > 0 else 1.0))
+ax.set_xlabel("Valor de χ²", fontsize=11)
+ax.set_ylabel("Densidad de Probabilidad", fontsize=11)
+ax.set_title(f"Distribución Chi-cuadrado con gl = {df_gl}", fontsize=12)
+ax.legend(fontsize=9, loc="upper right")
+ax.grid(True, linestyle=":", alpha=0.6)
+fig.tight_layout()
+
+st.pyplot(fig)
